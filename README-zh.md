@@ -196,6 +196,7 @@ MyTube 使用 **SQLite** 和 **Drizzle ORM** 进行数据持久化。数据库�
 
 有关 Docker 部署的详细说明（包括 GitHub 官方容器镜像 `ghcr.io/franklioxygen/mytube:latest` 与单容器 `stacks/docker-compose.single-container.yml`），请参阅 [Docker 部署指南](documents/zh/docker-guide.md).
 有关 `application` / `container` / `host` 三档管理员信任边界，请参阅 [部署安全模型](documents/zh/deployment-security-model.md)。
+有关两套实例部署、云端存储打通、yt-dlp 常见问题与保活体系的实践记录，请参阅 [部署实践汇总](documents/zh/deployment-practice.md)。
 
 ## 星标历史
 
