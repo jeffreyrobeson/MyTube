@@ -135,7 +135,52 @@ MyTube（https://github.com/jeffreyrobeson/MyTube）是一个自托管的视频�
 | 云端看不到刚下的视频 | 整文件 PUT 未完成 | 等待；多 GB 文件以小时计，属正常 |
 | 取信息后迟迟不动 | 取信息调用走了 web 客户端 | 见第五节第 4 条 |
 
-## 九、当前状态（2026-10-26）
+## 九、同步状态核查
+
+### 同步备份实例（rclone copy，无挂载）
+
+```bash
+# 看同步日志（日志是 UTC 时间，北京时间 +8 小时）
+tail -f ~/workspace/mytube-tianyi-sync.log
+# 找 Transferring（正在传，带百分比和 ETA）、Copied (new)（刚传完）、Errors（失败）
+
+# 看已落盘清单，在里面的 = 已到云端
+cat ~/workspace/mytube-tianyi-reported.txt
+
+# 看有没有在传（只判断进程存不存在，不要把完整 ps 输出贴出来，命令行里带令牌）
+ps aux | grep -q "[r]clone copy" && echo "正在传" || echo "没在传"
+
+# 手动触发一次同步检查（自动取令牌、传 backlog、打印新落盘的文件）
+bash ~/workspace/mytube-tianyi-sync.sh
+```
+
+直接查云端清单需要 OpenList 的 admin 令牌，分两步，令牌切勿外发：
+
+```bash
+cd ~/workspace/openlist && ./openlist admin token
+~/workspace/bin/rclone ls openlist-vm:musetianyi/mytube --config ~/workspace/rclone-openlist.conf --webdav-bearer-token 'TOKEN'
+# 带大小用 lsl；本地和云端逐一比对用：
+~/workspace/bin/rclone check /home/hatch/workspace/mytube/backend/uploads/videos openlist-vm:musetianyi/mytube --size-only --config ~/workspace/rclone-openlist.conf --webdav-bearer-token 'TOKEN'
+```
+
+### 挂载实例（rclone mount，视频直存云端）
+
+```bash
+# 在服务器上执行
+rclone lsl openlist:tianyi
+grep "upload succeeded" /var/log/rclone-openlist.log
+grep ERROR /var/log/rclone-openlist.log
+```
+
+### 怎么判断“同步完成”
+
+- 完成：本地视频清单 = 云端清单（名字和大小一致）；最新一次同步日志里没有 Transferring，也没有 rclone 进程在跑。
+- 进行中：日志有 Transferring 百分比和 ETA，或 rclone 进程在跑。
+- 异常：日志出现 Errors、Failed to copy、403/405，或者某个文件超过 24 小时还没落盘（每日体检会报这个）。
+
+注意：云端是整文件 PUT 完成前完全不可见，传到 99% 时云端也看不到它，不代表丢了，等到 100% 才会出现。
+
+## 十、当前状态（2026-10-26）
 
 - 两实例均运行中，登录保护均已开启；
 - VPS 实例：3 个视频已全部落盘天翼；
