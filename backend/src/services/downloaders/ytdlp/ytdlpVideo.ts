@@ -193,15 +193,28 @@ export async function downloadVideo(
     const networkConfig = getNetworkConfigFromUserConfig(userConfig);
 
     // Get video info first
+    // Local patch 2026-10-26: pass the user's extractor args (e.g.
+    // youtube:player_client=android from settings) into the info fetch too.
+    // Previously this call hardcoded the pot-provider script only, so
+    // withDefaultYouTubeExtractorArgs appended the default web client and the
+    // info fetch hit YouTube's bot-check even when the user configured
+    // android for the actual download, aborting the task before downloading.
+    const userExtractorArgs = userConfig.extractorArgs;
+    const infoExtractorArgs = [
+      ...(Array.isArray(userExtractorArgs)
+        ? userExtractorArgs
+        : userExtractorArgs
+          ? [userExtractorArgs]
+          : []),
+      ...(PROVIDER_SCRIPT
+        ? [`youtubepot-bgutilscript:script_path=${PROVIDER_SCRIPT}`]
+        : []),
+    ].join(";");
     const info = await executeYtDlpJson(videoUrl, {
       ...networkConfig,
       noWarnings: true,
       skipDownload: true,
-      ...(PROVIDER_SCRIPT
-        ? {
-            extractorArgs: `youtubepot-bgutilscript:script_path=${PROVIDER_SCRIPT}`,
-          }
-        : {}),
+      ...(infoExtractorArgs ? { extractorArgs: infoExtractorArgs } : {}),
     });
 
     rawSourceInfo = info as Record<string, unknown>;
