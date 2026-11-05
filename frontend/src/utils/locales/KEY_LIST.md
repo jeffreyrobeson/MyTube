@@ -11,21 +11,22 @@ UPDATE_KEY_LIST=1 npx vitest run src/utils/locales/__tests__/localeParity.test.t
 
 This list is intentionally unnumbered. When new keys are inserted, only the local section order changes.
 
-Total keys: 1397
+Total keys: 1469
 
 ## Summary
 
 | Section | Keys | First Key | Last Key |
 | --- | ---: | --- | --- |
+| Bulk video organization | 28 | `bulkInvalidVideos` | `bulkRequestUnknown` |
 | Header | 11 | `myTube` | `instruction` |
-| Home | 28 | `pasteUrl` | `views` |
+| Home | 30 | `pasteUrl` | `views` |
 | Settings | 4 | `general` | `downloadSettings` |
 | Settings Categories | 247 | `interfaceDisplay` | `enterNewTagName` |
 | Database | 38 | `database` | `cleanupTempFilesConfirmMessage` |
 | Task Hooks | 101 | `taskHooks` | `cleanupTempFilesFailed` |
 | Cookie Settings | 13 | `cookieSettings` | `youtubeCookiesMayHaveExpired` |
 | Cloud Drive | 38 | `cloudDriveSettings` | `clearThumbnailCacheConfirmMessage` |
-| Manage | 48 | `manageContent` | `confirmBulkDelete` |
+| Manage | 46 | `manageContent` | `confirmBulkDelete` |
 | Video Player | 35 | `playing` | `loadingVideo` |
 | D Mode (canvas + WebCodecs playback, no media element) | 36 | `compatibilityMode` | `deletingVideos` |
 | Login | 23 | `signIn` | `tooManyAttempts` |
@@ -37,10 +38,10 @@ Total keys: 1397
 | Video Card | 9 | `unknownDate` | `weeksAgo` |
 | Upload Modal | 19 | `selectVideoFile` | `thumbnailUploaded` |
 | Bilibili Modal | 22 | `bilibiliCollectionDetected` | `waitingInQueue` |
-| Downloads | 31 | `downloads` | `incompleteDownloadFragments` |
+| Downloads | 36 | `downloads` | `incompleteDownloadFragments` |
 | Snackbar Messages | 22 | `videoDownloading` | `subtitleDeleted` |
 | Batch Download | 6 | `batchDownload` | `addBatchTasks` |
-| Subscriptions | 60 | `subscribeToAuthor` | `clear` |
+| Subscriptions | 78 | `subscribeToAuthor` | `clear` |
 | Subscription Retention | 11 | `retentionDays` | `retentionDaysUpdateFailed` |
 | Auto Delete (library-wide age-based cleanup) | 15 | `autoDelete` | `videoUnlocked` |
 | Per-subscription yt-dlp config override (issue #345) | 5 | `editYtdlpConfigOverride` | `ytdlpConfigOverrideUpdateFailed` |
@@ -51,7 +52,7 @@ Total keys: 1397
 | Instruction Page | 39 | `instructionSection1Title` | `instructionSection3Item3Text` |
 | Disclaimer | 3 | `disclaimerTitle` | `history` |
 | Existing Video Detection | 16 | `existingVideoDetected` | `changeSettings` |
-| Sorting | 10 | `sort` | `random` |
+| Sorting | 11 | `select` | `random` |
 | yt-dlp Configuration | 62 | `ytDlpConfiguration` | `cleanupAuthorCollectionsFailed` |
 | Cloudflare Tunnel | 16 | `cloudflaredTunnel` | `managedInDashboard` |
 | Database Export/Import | 41 | `exportImportDatabase` | `backupDatabasesCleanedUp` |
@@ -62,7 +63,40 @@ Total keys: 1397
 | Filename template | 37 | `filenameTemplate` | `filenameBatchRenameError` |
 | Filename template reference (information panel) | 45 | `filenameRefInformationTitle` | `filenameRefItemNestedPathDesc` |
 | Statistics | 87 | `statisticsTitle` | `openCollection` |
-| Gesture Login (admin only) | 31 | `or` | `gestureLoginRetryStatus` |
+| Gesture Login (admin only) | 51 | `or` | `danmakuDelete` |
+
+### Bulk video organization
+
+| Key |
+| --- |
+| `bulkInvalidVideos` |
+| `bulkRemoveInvalid` |
+| `bulkRequestNotSent` |
+| `bulkSelectVideos` |
+| `bulkExitSelection` |
+| `bulkSelectedCount` |
+| `bulkSelectPage` |
+| `bulkSelectPageDescription` |
+| `bulkSelectResults` |
+| `bulkClearSelection` |
+| `bulkSelectionLimit` |
+| `bulkTagsTitle` |
+| `bulkTagsHint` |
+| `bulkTagsValidation` |
+| `bulkCollectionTitle` |
+| `bulkCollectionHint` |
+| `bulkExistingCollection` |
+| `bulkNewCollection` |
+| `bulkCollectionNameHint` |
+| `bulkAddToCollection` |
+| `bulkSelectVideo` |
+| `bulkSaved` |
+| `bulkUnchanged` |
+| `bulkSavedRefreshFailed` |
+| `bulkMissingVideos` |
+| `bulkRemoveMissing` |
+| `bulkCollectionConflict` |
+| `bulkRequestUnknown` |
 
 ### Header
 
@@ -110,6 +144,8 @@ Total keys: 1397
 | `fromBilibili` |
 | `loadingBilibiliResults` |
 | `noBilibiliResults` |
+| `bilibiliSearchFailed` |
+| `bilibiliSearchRiskControlled` |
 | `noVideosYet` |
 | `views` |
 
@@ -633,8 +669,6 @@ Total keys: 1397
 | `refreshFileSizesError` |
 | `noVideosFoundMatching` |
 | `refreshThumbnail` |
-| `selected` |
-| `moveCollection` |
 | `confirmBulkDelete` |
 
 ### Video Player
@@ -912,6 +946,11 @@ Total keys: 1397
 | `noActiveDownloads` |
 | `noQueuedDownloads` |
 | `noDownloadHistory` |
+| `downloadSourceCollection` |
+| `downloadMediaInfo` |
+| `downloadExistingFile` |
+| `downloadEstimatedSize` |
+| `downloadMediaInfoUnknown` |
 | `downloadCancelled` |
 | `queueCleared` |
 | `historyCleared` |
@@ -986,7 +1025,25 @@ Total keys: 1397
 | `subscribeDescription` |
 | `checkIntervalMinutes` |
 | `subscribe` |
+| `bilibiliAuthors` |
+| `authorSearchHint` |
+| `authorLookupLabel` |
+| `loadingAuthors` |
+| `noAuthorsFound` |
+| `authorSearchFailed` |
+| `authorSearchRiskControlled` |
+| `authorSubscriptionStatusFailed` |
+| `authorAlreadySubscribed` |
+| `authorSearchPage` |
 | `subscriptions` |
+| `allSubscriptions` |
+| `authorSubscriptions` |
+| `playlistSubscriptions` |
+| `subscriptionCategories` |
+| `noSubscriptions` |
+| `noAuthorSubscriptions` |
+| `noPlaylistSubscriptions` |
+| `subscriptionTasksAllCategories` |
 | `interval` |
 | `lastCheck` |
 | `nextCheck` |
@@ -1212,6 +1269,7 @@ Total keys: 1397
 
 | Key |
 | --- |
+| `select` |
 | `sort` |
 | `sortBy` |
 | `dateDesc` |
@@ -1690,3 +1748,23 @@ Total keys: 1397
 | `gestureLoginResetRequired` |
 | `gestureLoginStatusFailed` |
 | `gestureLoginRetryStatus` |
+| `downloadBilibiliDanmaku` |
+| `downloadBilibiliDanmakuDescription` |
+| `danmaku` |
+| `danmakuLoading` |
+| `danmakuReady` |
+| `danmakuEmpty` |
+| `danmakuNone` |
+| `danmakuLoadFailed` |
+| `danmakuIgnored` |
+| `danmakuOperationFailed` |
+| `danmakuOpacity` |
+| `danmakuOffset` |
+| `danmakuExternalNotice` |
+| `danmakuImport` |
+| `danmakuInvalidFile` |
+| `danmakuReplaceConfirm` |
+| `danmakuLoad` |
+| `danmakuRefresh` |
+| `danmakuDeleteConfirm` |
+| `danmakuDelete` |

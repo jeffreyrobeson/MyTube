@@ -21,6 +21,7 @@ import {
     normalizeYouTubeAuthorUrl,
 } from "../utils/helpers";
 import { logger } from "../utils/logger";
+import { getBilibiliAuthorId } from "../utils/bilibiliAuthor";
 import { runWithConcurrencyLimit } from "../utils/concurrency";
 import { isMembersOnlyError } from "../utils/ytdlp/errorClassification";
 import { getEffectiveUserYtDlpConfig } from "../utils/ytDlpUtils";
@@ -120,6 +121,9 @@ export class SubscriptionService {
 
     if (isBilibiliSpaceUrl(authorUrl)) {
       platform = "Bilibili";
+      const authorId = getBilibiliAuthorId(authorUrl);
+      if (!authorId) throw ValidationError.invalidBilibiliSpaceUrl(authorUrl);
+      authorUrl = `https://space.bilibili.com/${authorId}`;
 
       // If author name not provided, try to get it from Bilibili API
       if (!providedAuthorName) {
@@ -211,10 +215,14 @@ export class SubscriptionService {
     }
 
     // Check if already subscribed
-    const existing = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.authorUrl, authorUrl));
+    // Bilibili identity is its UID, including legacy HTTP/trailing-slash/tab
+    // URLs. Keep its check and insert synchronous to prevent double clicks in
+    // concurrent requests from both passing the duplicate check.
+    const existing = platform === "Bilibili"
+      ? db.select().from(subscriptions).all().filter((item) =>
+        (!item.subscriptionType || item.subscriptionType === "author") &&
+        getBilibiliAuthorId(item.authorUrl) === getBilibiliAuthorId(authorUrl))
+      : await db.select().from(subscriptions).where(eq(subscriptions.authorUrl, authorUrl));
     if (existing.length > 0) {
       throw DuplicateError.subscription();
     }
@@ -246,7 +254,9 @@ export class SubscriptionService {
       filenameTemplate: filenameTemplate ?? null,
     };
 
-    await db.insert(subscriptions).values(newSubscription);
+    const insert = db.insert(subscriptions).values(newSubscription);
+    if (platform === "Bilibili") insert.run();
+    else await insert;
     return newSubscription;
   }
 
@@ -883,8 +893,10 @@ export class SubscriptionService {
             thumbnailPath: videoData.thumbnailPath,
             videoId: videoData.id,
             incompleteDownloadNote: videoData.incompleteDownloadNote,
+            mediaInfo: videoData.downloadMediaInfo,
             mediaType: videoData.mediaType === "audio" ? "audio" : "video",
             subscriptionId: sub.id,
+            sourceCollectionName: sub.subscriptionType === "playlist" ? sub.playlistTitle : undefined,
             platform:
               typeof sub.platform === "string"
                 ? sub.platform.toLowerCase()
@@ -1000,6 +1012,7 @@ export class SubscriptionService {
               status: "failed",
               error: errorMessage,
               subscriptionId: sub.id,
+              sourceCollectionName: sub.subscriptionType === "playlist" ? sub.playlistTitle : undefined,
               platform:
                 typeof sub.platform === "string"
                   ? sub.platform.toLowerCase()
@@ -1085,8 +1098,10 @@ export class SubscriptionService {
               thumbnailPath: videoData.thumbnailPath,
               videoId: videoData.id,
               incompleteDownloadNote: videoData.incompleteDownloadNote,
+              mediaInfo: videoData.downloadMediaInfo,
               mediaType: videoData.mediaType === "audio" ? "audio" : "video",
               subscriptionId: sub.id,
+              sourceCollectionName: sub.subscriptionType === "playlist" ? sub.playlistTitle : undefined,
               platform:
                 typeof sub.platform === "string"
                   ? sub.platform.toLowerCase()
@@ -1182,6 +1197,7 @@ export class SubscriptionService {
               status: "failed",
               error: errorMessage,
               subscriptionId: sub.id,
+              sourceCollectionName: sub.subscriptionType === "playlist" ? sub.playlistTitle : undefined,
               platform:
                 typeof sub.platform === "string"
                   ? sub.platform.toLowerCase()
@@ -1442,6 +1458,7 @@ export class SubscriptionService {
       status: "skipped",
       error: `Skipped ${reason} content`,
       subscriptionId: sub.id,
+      sourceCollectionName: sub.subscriptionType === "playlist" ? sub.playlistTitle : undefined,
       platform:
         typeof sub.platform === "string"
           ? sub.platform.toLowerCase()
@@ -1503,6 +1520,8 @@ export class SubscriptionService {
         suppressHistory: true,
         suppressCompletionNotification: true,
         disableAutoRetry: true,
+        author: sub.author,
+        sourceCollectionName: sub.subscriptionType === "playlist" ? sub.playlistTitle : undefined,
       }
     );
   }

@@ -1,3 +1,4 @@
+import { captureDownloadMediaInfo } from "../../mediaInfoService";
 import fs from "fs-extra";
 import { getErrorMessage } from "../../../utils/errors";
 import path from "path";
@@ -302,6 +303,8 @@ export async function downloadVideo(
     if (downloadId) {
       storageService.updateActiveDownload(downloadId, {
         title: videoTitle,
+        author: videoAuthor,
+        sourceCollectionName: filenameTemplateSourceOptions?.sourceCollectionType === "playlist" ? filenameTemplateSourceOptions.sourceCollectionName : undefined,
         filename: videoTitle,
         progress: 0,
       });
@@ -959,7 +962,7 @@ export async function downloadVideo(
       syncMediaServerArtifactsForRecord(finalVideoData, {
         rawSourceInfo,
       });
-      return storageService.withIncompleteDownloadNote(finalVideoData, incompleteNote);
+      return await captureDownloadMediaInfo(storageService.withIncompleteDownloadNote(finalVideoData, incompleteNote), filenameTemplateSourceOptions);
     }
   }
 
@@ -1000,14 +1003,14 @@ export async function downloadVideo(
       syncMediaServerArtifactsForRecord(updatedVideo, {
         rawSourceInfo,
       });
-      return storageService.withIncompleteDownloadNote(updatedVideo, incompleteNote);
+      return await captureDownloadMediaInfo(storageService.withIncompleteDownloadNote(updatedVideo, incompleteNote), filenameTemplateSourceOptions);
     }
   }
 
   syncMediaServerArtifactsForRecord(videoData, {
     rawSourceInfo,
   });
-  return storageService.withIncompleteDownloadNote(videoData, incompleteNote);
+  return await captureDownloadMediaInfo(storageService.withIncompleteDownloadNote(videoData, incompleteNote), filenameTemplateSourceOptions);
   } finally {
     releaseOutputReservation?.();
   }

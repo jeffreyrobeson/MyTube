@@ -617,6 +617,12 @@ export function ensureFavoritesTables(): void {
 // favorites and download_history, plus the file-size/video_id data backfills.
 export function migrateColumnsAndTables(): void {
   try {
+    sqlite.prepare(`CREATE TABLE IF NOT EXISTS danmaku_tracks (
+    video_id TEXT PRIMARY KEY NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    source TEXT NOT NULL, cid TEXT, revision TEXT,
+    event_count INTEGER NOT NULL DEFAULT 0, ignored_count INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL, last_error TEXT
+    )`).run();
     const tableInfo = sqlite.prepare("PRAGMA table_info(videos)").all();
     const columns = columnNames(tableInfo);
 
@@ -790,6 +796,12 @@ export function migrateColumnsAndTables(): void {
       .prepare("PRAGMA table_info(downloads)")
       .all();
     const downloadsColumns = columnNames(downloadsTableInfo);
+    if (!downloadsColumns.includes("author")) {
+      sqlite.prepare("ALTER TABLE downloads ADD COLUMN author TEXT").run();
+    }
+    if (!downloadsColumns.includes("source_collection_name")) {
+      sqlite.prepare("ALTER TABLE downloads ADD COLUMN source_collection_name TEXT").run();
+    }
 
     if (!downloadsColumns.includes("source_url")) {
       logger.info(
@@ -965,6 +977,9 @@ export function migrateColumnsAndTables(): void {
       .prepare("PRAGMA table_info(download_history)")
       .all();
     const downloadHistoryColumns = columnNames(downloadHistoryTableInfo);
+    if (!downloadHistoryColumns.includes("media_info")) {
+      sqlite.prepare("ALTER TABLE download_history ADD COLUMN media_info TEXT").run();
+    }
 
     if (!downloadHistoryColumns.includes("video_id")) {
       logger.info(

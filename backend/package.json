@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "1.11.14",
+  "version": "1.11.18",
   "main": "server.js",
   "scripts": {
     "preinstall": "node scripts/check-supported-node.cjs backend",
@@ -39,11 +39,12 @@
     "file-type": "file:vendor/file-type",
     "fs-extra": "^11.3.3",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.4.0",
+    "multer": "^2.5.0",
     "node-cron": "^4.2.1",
     "proxy-agent": "^8.0.2",
-    "puppeteer": "^25.1.0",
+    "puppeteer": "^25.16.0",
     "sanitize-filename": "^1.6.3",
+    "sax": "^1.6.1",
     "socks-proxy-agent": "^8.0.5",
     "uuid": "^14.0.0",
     "ws": "^8.21.0",
@@ -59,22 +60,23 @@
     "@types/multer": "^2.0.0",
     "@types/node": "^24.10.1",
     "@types/node-cron": "^3.0.11",
+    "@types/sax": "^1.2.7",
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.12",
     "drizzle-kit": "^0.31.8",
     "nodemon": "^3.0.3",
     "supertest": "^7.1.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "basic-ftp": "^6.2.1",
     "esbuild": "0.28.1",
-    "qs": "^6.16.0",
-    "undici": "^7.30.0",
+    "qs": "^6.17.1",
+    "undici": "^7.30.1",
     "yauzl": "^3.2.1"
   }
 }

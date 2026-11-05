@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryObserver, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -660,6 +660,63 @@ describe('VideoContext', () => {
     });
     expect(result.current.bilibiliSearchResults).toEqual([]);
   });
+  it.each([
+    ['BILIBILI_SEARCH_RISK_CONTROLLED', 'risk_control'],
+    ['BILIBILI_SEARCH_UNAVAILABLE', 'unavailable'],
+  ])('reports %s separately, preserves other sources, and retries only Bilibili', async (code, expected) => {
+    let fail = true;
+    const error = { isAxiosError: true, response: { status: 502, data: { code } } };
+    mockApiGet.mockImplementation((url: string, config?: any) => {
+      if (url === '/settings') return Promise.resolve({ data: { showYoutubeSearch: true, showBilibiliSearch: true } });
+      if (url === '/videos') return Promise.resolve({ data: [{ id: 'v1', title: 'React local', visibility: 1 }] });
+      if (url === '/search') return config.params.source === 'bilibili'
+        ? fail ? Promise.reject(error) : Promise.resolve({ data: { results: [{ id: 'BV1' }] } })
+        : Promise.resolve({ data: { results: [{ id: 'yt1' }] } });
+      return Promise.resolve({ data: {} });
+    });
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useVideo(), { wrapper });
+    await waitFor(() => expect(result.current.showBilibiliSearch).toBe(true));
+    await act(async () => { await result.current.handleSearch('react'); });
+    expect(result.current.bilibiliSearchError).toBe(expected);
+    expect(result.current.searchResults).toEqual([{ id: 'yt1' }]);
+    expect(result.current.localSearchResults).toHaveLength(1);
+    const youtubeCalls = mockApiGet.mock.calls.filter(([url, config]) => url === '/search' && config.params.source === 'youtube').length;
+    fail = false;
+    await act(async () => { await result.current.loadMoreBilibiliSearchResults(); });
+    expect(result.current.bilibiliSearchError).toBeNull();
+    expect(result.current.bilibiliSearchResults).toEqual([{ id: 'BV1' }]);
+    expect(mockApiGet.mock.calls.filter(([url, config]) => url === '/search' && config.params.source === 'youtube')).toHaveLength(youtubeCalls);
+    fail = true;
+    await act(async () => { await result.current.loadMoreBilibiliSearchResults(); });
+    expect(result.current.bilibiliSearchError).toBe(expected);
+    expect(result.current.bilibiliSearchResults).toEqual([{ id: 'BV1' }]);
+    expect(result.current.searchResults).toEqual([{ id: 'yt1' }]);
+    await act(async () => { result.current.resetSearch(); });
+    expect(result.current.bilibiliSearchError).toBeNull();
+  });
+  it('ignores a late failure from a superseded Bilibili query', async () => {
+    let rejectOld!: (error: unknown) => void;
+    const oldRequest = new Promise((_resolve, reject) => { rejectOld = reject; });
+    mockApiGet.mockImplementation((url: string, config?: any) => {
+      if (url === '/settings') return Promise.resolve({ data: { showYoutubeSearch: false, showBilibiliSearch: true } });
+      if (url === '/videos') return Promise.resolve({ data: [] });
+      if (url === '/search') return config.params.query === 'old' ? oldRequest : Promise.resolve({ data: { results: [{ id: 'BV-new' }] } });
+      return Promise.resolve({ data: {} });
+    });
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useVideo(), { wrapper });
+    await waitFor(() => expect(result.current.showBilibiliSearch).toBe(true));
+    let old!: Promise<unknown>;
+    act(() => { old = result.current.handleSearch('old'); });
+    await act(async () => { await result.current.handleSearch('new'); });
+    await act(async () => {
+      rejectOld({ isAxiosError: true, response: { status: 502, data: { code: 'BILIBILI_SEARCH_RISK_CONTROLLED' } } });
+      await old;
+    });
+    expect(result.current.bilibiliSearchError).toBeNull();
+    expect(result.current.bilibiliSearchResults).toEqual([{ id: 'BV-new' }]);
+  });
 
   it('does not append a previous query\'s Bilibili more-results response to a newer query', async () => {
     let resolveOldMore: ((value: unknown) => void) | undefined;
@@ -777,6 +834,47 @@ describe('VideoContext', () => {
     mockApiDelete.mockRejectedValueOnce(new Error('delete fail'));
     const failed = await result.current.deleteVideo('v2', { showSnackbar: false });
     expect(failed).toEqual({ success: false, error: 'failedToDeleteVideo' });
+  });
+
+  it('caps bulk deletion at five requests and reports one summary', async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useVideo(), { wrapper });
+    await waitFor(() => expect(result.current.videos).toHaveLength(2));
+    const releases: Array<() => void> = [];
+    mockApiDelete.mockImplementation(() => new Promise((resolve) => {
+      releases.push(() => resolve({ data: { success: true } }));
+    }));
+    const ids = Array.from({ length: 12 }, (_, i) => `bulk${i}`);
+    let operation: ReturnType<typeof result.current.deleteVideos>;
+    act(() => { operation = result.current.deleteVideos(ids); });
+    for (const expected of [5, 10, 12]) {
+      await waitFor(() => expect(mockApiDelete).toHaveBeenCalledTimes(expected));
+      await act(async () => { releases.splice(0).forEach((release) => release()); });
+    }
+    await act(async () => { expect(await operation).toEqual({ success: true }); });
+    expect(mockShowSnackbar).toHaveBeenCalledExactlyOnceWith('deleteFilteredVideosSuccess');
+  });
+
+  it.each([false, true])('refreshes each membership query once after bulk deletion (partial failure: %s)', async (partialFailure) => {
+    const { wrapper, queryClient } = createWrapper();
+    const { result } = renderHook(() => useVideo(), { wrapper });
+    await waitFor(() => expect(result.current.videos).toHaveLength(2));
+    const readCollections = vi.fn(async () => []);
+    const observer = new QueryObserver(queryClient, {
+      queryKey: ['collections'], queryFn: readCollections, initialData: [], staleTime: Infinity,
+    });
+    const stop = observer.subscribe(() => {});
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    if (partialFailure) mockApiDelete.mockRejectedValueOnce(new Error('one failed'));
+    try {
+      await act(async () => {
+        expect((await result.current.deleteVideos(Array.from({ length: 12 }, (_, i) => `bulk${i}`))).success).toBe(!partialFailure);
+      });
+      for (const key of ['collections', 'favorite-collections', 'favorite-authors']) {
+        expect(invalidate.mock.calls.filter(([filter]) => filter?.queryKey?.[0] === key)).toHaveLength(1);
+      }
+      expect(readCollections).toHaveBeenCalledOnce();
+    } finally { stop(); }
   });
 
   it('deleteVideos handles partial failures', async () => {

@@ -528,6 +528,22 @@ describe('D Mode progress bar seeking', () => {
         expect(engine.seek).toHaveBeenCalledWith(10 + SHORT_SECONDS * 2);
     });
 
+    it('flags a completed seek in its time update', async () => {
+        const onTimeUpdate = vi.fn();
+        render(<CompatibilityPlayer src="clip.webm" onTimeUpdate={onTimeUpdate} />);
+        const engine = harness.engines[0];
+
+        await act(async () => {
+            engine.options.onChange(snapshotOf({ status: 'playing', currentTime: 11 }));
+        });
+        expect(onTimeUpdate).toHaveBeenLastCalledWith(11);
+
+        await act(async () => {
+            engine.options.onSeeked?.(13);
+        });
+        expect(onTimeUpdate).toHaveBeenLastCalledWith(13, { seeked: true });
+    });
+
     it('locks the bar for a source that cannot be repositioned', async () => {
         render(<CompatibilityPlayer src="clip.webm" />);
         await act(async () => {
@@ -535,5 +551,25 @@ describe('D Mode progress bar seeking', () => {
         });
 
         expect(screen.getByTestId('seek-slider')).toBeDisabled();
+    });
+});
+
+describe('D Mode picture overlays', () => {
+    beforeEach(() => {
+        harness.engines.length = 0;
+    });
+
+    it('stacks the busy indicator and transport above the danmaku canvas', async () => {
+        render(<CompatibilityPlayer src="clip.webm" />);
+        await act(async () => {
+            harness.engines[0].options.onChange(snapshotOf({ buffering: true }));
+        });
+
+        const danmakuCanvasZIndex = 2;
+        const busyIndicator = screen.getByText('loadingVideo').parentElement as HTMLElement;
+        const transport = document.querySelector('.compat-primary')?.parentElement?.parentElement as HTMLElement;
+
+        expect(Number(getComputedStyle(busyIndicator).zIndex)).toBeGreaterThan(danmakuCanvasZIndex);
+        expect(Number(getComputedStyle(transport).zIndex)).toBeGreaterThan(danmakuCanvasZIndex);
     });
 });

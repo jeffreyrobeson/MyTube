@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Video, VideoSearchResult } from '../types';
 import { useStatisticsIngestion } from '../hooks/useStatisticsIngestion';
@@ -15,6 +16,11 @@ const MAX_SEARCH_RESULTS = 200; // Maximum number of search results to keep in m
 // The external platforms `/search` can be asked for, one section of the search
 // page each.
 type ExternalSearchSource = 'youtube' | 'bilibili';
+type BilibiliSearchError = 'risk_control' | 'unavailable';
+
+const classifyBilibiliSearchError = (error: unknown): BilibiliSearchError =>
+    isAxiosError<{ code?: string }>(error) && error.response?.data?.code === 'BILIBILI_SEARCH_RISK_CONTROLLED'
+        ? 'risk_control' : 'unavailable';
 
 /** Identifies which sources a search covered, so a change to them is detectable. */
 const sourcesKey = (youtube: boolean, bilibili: boolean) => `${youtube}|${bilibili}`;
@@ -51,6 +57,7 @@ interface VideoContextType {
     loadingMore: boolean;
     bilibiliSearchResults: VideoSearchResult[];
     bilibiliLoading: boolean;
+    bilibiliSearchError: BilibiliSearchError | null;
     showBilibiliSearch: boolean;
     loadMoreBilibiliSearchResults: () => Promise<void>;
     loadingMoreBilibili: boolean;
@@ -174,6 +181,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [loadingMore, setLoadingMore] = useState<boolean>(false);
     const [bilibiliSearchResults, setBilibiliSearchResults] = useState<VideoSearchResult[]>([]);
     const [bilibiliLoading, setBilibiliLoading] = useState<boolean>(false);
+    const [bilibiliSearchError, setBilibiliSearchError] = useState<BilibiliSearchError | null>(null);
     const [loadingMoreBilibili, setLoadingMoreBilibili] = useState<boolean>(false);
 
     // Reference to the current search request's abort controller
@@ -204,8 +212,14 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
     }, [queryClient]);
 
+    const refreshVideoMemberships = useCallback(() => Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['favorite-authors'] }),
+        queryClient.invalidateQueries({ queryKey: ['favorite-collections'] }),
+        queryClient.invalidateQueries({ queryKey: ['collections'] }),
+    ]), [queryClient]);
+
     const deleteVideoMutation = useMutation({
-        mutationFn: async ({ id }: { id: string; options?: { showSnackbar?: boolean } }) => {
+        mutationFn: async ({ id }: { id: string; options?: { showSnackbar?: boolean; deferMembershipRefresh?: boolean } }) => {
             await api.delete(`/videos/${id}`);
             return id;
         },
@@ -213,16 +227,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             queryClient.setQueryData(['videos'], (old: Video[] | undefined) =>
                 old ? old.filter(video => video.id !== id) : []
             );
-            // Deleting a video changes visibility-aware favorite counts/covers
-            // (e.g. removing an author's last video, or a favorited collection's
-            // cover), so refresh favorites to avoid stale cards that link to now
-            // empty author/collection pages.
-            queryClient.invalidateQueries({ queryKey: ['favorite-authors'] });
-            queryClient.invalidateQueries({ queryKey: ['favorite-collections'] });
-            // Membership is cascaded away with the video in the database, so a
-            // collection cached here would go on listing an id that is gone -
-            // and a collection left with nothing would not read as empty.
-            queryClient.invalidateQueries({ queryKey: ['collections'] });
+            if (!variables.options?.deferMembershipRefresh) void refreshVideoMemberships();
             if (variables.options?.showSnackbar !== false) {
                 showSnackbar(t('videoRemovedSuccessfully'));
             }
@@ -255,7 +260,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 const outcomes = await Promise.all(
                     chunk.map(async (id) => {
                         try {
-                            await deleteVideoMutation.mutateAsync({ id, options: { showSnackbar: false } });
+                            await deleteVideoMutation.mutateAsync({ id, options: { showSnackbar: false, deferMembershipRefresh: true } });
                             return true;
                         } catch (error) {
                             console.error(`Failed to delete video ${id}:`, error);
@@ -269,17 +274,19 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 }
             }
 
+            if (successCount) await refreshVideoMemberships();
+
             if (failCount === 0) {
                 showSnackbar(t('deleteFilteredVideosSuccess', { count: successCount }));
                 return { success: true };
             } else {
                 showSnackbar(`${t('deleteFilteredVideosSuccess', { count: successCount })} (${failCount} failed)`);
-                return { success: failCount === 0 }; // Consider partial success as success? strict: fail if any fail
+                return { success: false };
             }
         } catch {
             return { success: false, error: t('failedToDeleteVideo') };
         }
-    }, [deleteVideoMutation, showSnackbar, t]);
+    }, [deleteVideoMutation, refreshVideoMemberships, showSnackbar, t]);
 
     const searchLocalVideos = useCallback((query: string) => {
         if (!query || !videos.length) return [];
@@ -320,6 +327,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setBilibiliSearchResults([]);
         setYoutubeLoading(false);
         setBilibiliLoading(false);
+        setBilibiliSearchError(null);
         setLoadingMore(false);
         setLoadingMoreBilibili(false);
         setLastSearchEventId(null);
@@ -400,6 +408,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 setResults: React.Dispatch<React.SetStateAction<VideoSearchResult[]>>,
                 setLoading: React.Dispatch<React.SetStateAction<boolean>>
             ): Promise<VideoSearchResult[]> => {
+                if (source === 'bilibili') setBilibiliSearchError(null);
                 if (!enabled) {
                     // Clear any existing results when the source is disabled
                     setResults([]);
@@ -427,6 +436,9 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 } catch (externalErr: unknown) {
                     if (!isAbortError(externalErr)) {
                         console.error(`Error searching ${source}:`, externalErr);
+                        if (source === 'bilibili' && !signal.aborted && searchGeneration.current === generation) {
+                            setBilibiliSearchError(classifyBilibiliSearchError(externalErr));
+                        }
                     }
                     return [];
                 } finally {
@@ -510,6 +522,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Set both state and ref to prevent concurrent requests
             inProgressRef.current = true;
             setIsLoadingMore(true);
+            if (source === 'bilibili') setBilibiliSearchError(null);
 
             const limit = 8;
             const offset = currentCount + 1;
@@ -542,9 +555,10 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 });
             }
         } catch (error) {
-            if (searchGeneration.current === generation) {
+            if (searchGeneration.current === generation && !isAbortError(error)) {
                 console.error(`Error loading more ${source} results:`, error);
-                showSnackbar(t('failedToSearch'));
+                if (source === 'bilibili') setBilibiliSearchError(classifyBilibiliSearchError(error));
+                else showSnackbar(t('failedToSearch'));
             }
         } finally {
             if (searchGeneration.current === generation) {
@@ -822,6 +836,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loadingMore,
         bilibiliSearchResults,
         bilibiliLoading,
+        bilibiliSearchError,
         showBilibiliSearch,
         loadMoreBilibiliSearchResults,
         loadingMoreBilibili,
@@ -832,7 +847,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isSearchMode, searchTerm, youtubeLoading, handleSearch, lastSearchEventId,
         resetSearch, setVideos, availableTags, selectedTags, handleTagToggle,
         clearSelectedTags, showYoutubeSearch, loadMoreSearchResults, loadingMore,
-        bilibiliSearchResults, bilibiliLoading, showBilibiliSearch,
+        bilibiliSearchResults, bilibiliLoading, bilibiliSearchError, showBilibiliSearch,
         loadMoreBilibiliSearchResults, loadingMoreBilibili,
     ]);
 

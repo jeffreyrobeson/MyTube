@@ -70,6 +70,17 @@ export const videos = sqliteTable(
   })
 );
 
+export const danmakuTracks = sqliteTable("danmaku_tracks", {
+  videoId: text("video_id").primaryKey().references(() => videos.id, { onDelete: "cascade" }),
+  source: text("source").notNull(),
+  cid: text("cid"),
+  revision: text("revision"),
+  eventCount: integer("event_count").notNull().default(0),
+  ignoredCount: integer("ignored_count").notNull().default(0),
+  updatedAt: integer("updated_at").notNull(),
+  lastError: text("last_error"),
+});
+
 export const collections = sqliteTable(
   "collections",
   {
@@ -211,6 +222,8 @@ export const users = sqliteTable(
 export const downloads = sqliteTable("downloads", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
+  author: text("author"),
+  sourceCollectionName: text("source_collection_name"),
   timestamp: integer("timestamp"),
   filename: text("filename"),
   totalSize: text("total_size"),
@@ -229,6 +242,7 @@ export const downloadHistory = sqliteTable(
     id: text("id").primaryKey(),
     title: text("title").notNull(),
     author: text("author"),
+    mediaInfo: text("media_info"),
     sourceUrl: text("source_url"),
     finishedAt: integer("finished_at").notNull(), // Timestamp
     status: text("status").notNull(), // 'success', 'failed', 'partial', 'skipped', 'deleted', or 'pending_retry'

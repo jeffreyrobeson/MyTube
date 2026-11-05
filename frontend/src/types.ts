@@ -80,6 +80,8 @@ export interface FavoriteAuthorItem {
 }
 
 export interface DownloadInfo {
+  author?: string;
+  sourceCollectionName?: string;
   id: string;
   title: string;
   timestamp?: number;
@@ -215,6 +217,7 @@ export interface Settings {
   cloudDriveScanPaths?: string;
   homeSidebarOpen?: boolean;
   subtitlesEnabled?: boolean;
+  downloadBilibiliDanmaku?: boolean;
   playerSeekShortSeconds?: number;
   playerSeekMediumSeconds?: number;
   playerSeekLongSeconds?: number;
