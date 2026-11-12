@@ -30,7 +30,7 @@ MyTube（https://github.com/jeffreyrobeson/MyTube）是一个自托管的视频�
 | 运行方式 | Docker Compose | 源码构建、Node 直跑（环境无 Docker） | 源码构建、Node 直跑（环境无 Docker、无 systemd） |
 | 前端 / 后端端口 | 5556 / 5551 | 后端 5551（同源 serving 前端） | 后端 5551（同源 serving 前端） |
 | 视频主存储 | 云端（见第三节） | 本地磁盘 + 单向同步备份到云端（见第四节） | 本地磁盘 + 单向同步备份到云端（见第十四节） |
-| 公开访问 | 服务器端口直出 | 经 VPS 的 SSH 反向隧道公开（MyTube 25551、OpenList 25244） | 经 VPS 的 SSH 反向隧道公开（MyTube 55551、OpenList 55244） |
+| 公开访问 | 服务器端口直出 | 经 VPS 的 SSH 反向隧道公开（MyTube 25551、OpenList 25244） | MyTube 经 VPS 的 SSH 反向隧道公开（55551）；OpenList 用另一台的 45244（见第十四节第 3 条） |
 | 登录 | 已开启（401 保护 API） | 全新部署后尚未开启，待在设置里开启 | 已开启（401 保护 API） |
 | yt-dlp cookies | 使用登录 cookies（该出口 IP 未被标记） | 不用登录 cookies（见第五节） | 使用登录 cookies（见第十四节第 4 条） |
 
@@ -220,7 +220,7 @@ grep ERROR /var/log/rclone-openlist.log
 
 - 已更新到上游 v1.11.20（2026-11-10 合并，见第十三节）；本地 android 取信息补丁仍在；
 - 实例 B：2026-11-12 核查时在助理 VM 上未找到实际部署（该 VM 上没有 MyTube），本节此前写的实例 B 状态是计划值；当前实际在跑的是实例 C（见第十四节）；
-- 实例 C（Simular Box）：MyTube v1.11.20 源码构建，本地 5551 正常；OpenList v4.2.8 本地 5244 正常；公网隧道 MyTube 55551、OpenList 55244 已通并验证；MyTube 登录已开启；yt-dlp 配置为 web + 登录 cookies + node + ejs（见第十四节第 4 条）；两个视频已下载并同步备份到天翼（见第十四节第 7 条，核查方法见第九节）；
+- 实例 C（Simular Box）：MyTube v1.11.20 源码构建，本地 5551 正常；OpenList v4.2.8 本地 5244 正常；公网隧道 MyTube 55551 已通并验证；OpenList 用另一台的 45244（Box 本地 55244 部署不成功，不在用）；MyTube 登录已开启；yt-dlp 配置为 web + 登录 cookies + node + ejs（见第十四节第 4 条）；两个视频已下载并同步备份到天翼（见第十四节第 7 条，核查方法见第九节）；
 - 中继 OpenList（45244）时断时续：2026-11-12 02:00 与 12:48 两次拒绝连接，主机本身通，是该服务进程停了；有专人监控、半小时内自动恢复（13:01 已恢复，13:00 定时同步成功）；
 - Box 本地 /boxtianyi 挂载仍坏：2026-11-12 12:53 复查，Box 到 189.cn 仍 10 秒超时，日志里天翼 OAuth 登录超时 20 次（最后一次 08:29）；同步不走它，不影响落盘；
 - yt-dlp 托管发行版 2026.10.26 已安装（证书软链已做，升级后须重做，见第五节第 1 条）；
@@ -281,7 +281,7 @@ Simular Box（https://simular.ai）是一台按量计费的云桌面：浏览器
   setsid ssh -i ~/.ssh/id_ed25519_mytube -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -N -R 0.0.0.0:55551:localhost:5551 -R 0.0.0.0:55244:localhost:5244 root@<VPS>
   ```
 
-  VPS 侧 `sshd_config` 须把 `GatewayPorts` 设为 `yes`（默认只绑 127.0.0.1，公网打不开；改完 `sshd -t` 检查并重载 sshd）。公开地址：MyTube `http://<VPS 公网 IP>:55551/`、OpenList `http://<VPS 公网 IP>:55244/`，均验证返回 200。
+  VPS 侧 `sshd_config` 须把 `GatewayPorts` 设为 `yes`（默认只绑 127.0.0.1，公网打不开；改完 `sshd -t` 检查并重载 sshd）。公开地址：MyTube `http://<VPS 公网 IP>:55551/`，验证返回 200。Box 的 OpenList 虽经隧道转发到 55244 且能返回 200，但它的天翼挂载是坏的，部署不成功、不在用；实际用的 OpenList 是另一台的 45244（见下面同步一节）。
 
 云端同步（Box → VPS 中继 → 另一台 OpenList）：Box 直连不上天翼 API 和中继 OpenList，于是用一条 SSH 本地转发做中继：
 
@@ -399,7 +399,7 @@ Box 没有 systemd，所有进程在休眠/重启后都会死，需按下面顺�
 1. 唤醒 Box（界面 Offline 是正常的，唤醒后几秒恢复）。
 2. MyTube 后端：`cd ~/mytube/backend && npm run start`（前台终端跑）。
 3. POT 服务：`~/mytube/backend/bgutil-ytdlp-pot-provider/server` 里 `setsid nohup node build/main.js`，日志 `/tmp/pot-server.log`，等 `ping` 返回 200（约 27 秒）。
-4. 反向隧道：`setsid ssh -i ~/.ssh/id_ed25519_mytube -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -N -R 0.0.0.0:55551:localhost:5551 -R 0.0.0.0:55244:localhost:5244 root@<VPS>`，日志 `/tmp/mytube-tunnel.log`。
+4. 反向隧道：`setsid ssh -i ~/.ssh/id_ed25519_mytube -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -N -R 0.0.0.0:55551:localhost:5551 -R 0.0.0.0:55244:localhost:5244 root@<VPS>`，日志 `/tmp/mytube-tunnel.log`（55244 这一路转发还在跑，但 Box 的 OpenList 不在用，见第 3 条）。
 5. 同步中继：`setsid ssh -i ~/.ssh/id_ed25519_mytube -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -N -L 127.0.0.1:14544:<中继 OpenList 地址>:45244 root@<VPS>`，日志 `/tmp/mytube-relay.log`。
 6. cron 守护进程：`sudo cron`（每 30 分钟跑同步脚本）。
 7. OpenList：`~/openlist` 里 `setsid ./openlist server`。
