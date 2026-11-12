@@ -168,6 +168,8 @@ MyTube（https://github.com/jeffreyrobeson/MyTube）是一个自托管的视频�
 | `Requested format is not available`，且只有 storyboard 格式 | 后端附加的 `--cookies` 文件里的 YouTube cookies 已过期失效 | 把过期的 cookies 文件移走备份，只用浏览器实时 cookies（第十四节第 5 条第 7 项） |
 | `MyTube SSRF protection: this media transport is not supported` | 字幕语言 `all` 包含 live_chat，SSRF 校验拦了 `youtube_live_chat` 协议 | 把 `youtube_live_chat`、`youtube_live_chat_replay` 加进 `network-guard.py` 白名单（第十四节第 5 条第 8 项） |
 | HTTP Error 403（android 客户端，个别视频） | YouTube 对该视频开了 SABR-only 实验 | 换 web 客户端 + 登录 cookies（第十四节第 5 条第 1 项） |
+| `relay to remote OpenList is down` / 中继 14544 返回 000 | 远程 OpenList 的 45244 进程停了（主机本身通） | 去那台机器上重启 OpenList，或等它自动恢复（半小时内）；恢复后中继无需重建（第十四节第 5 条第 9 项） |
+| Box 本地 /boxtianyi 挂载失败（天翼登录超时） | Box 连不上 189.cn | 同步不走它，走远程 OpenList，可忽略（第十四节第 3 条） |
 
 ## 九、同步状态核查
 
@@ -219,6 +221,8 @@ grep ERROR /var/log/rclone-openlist.log
 - 已更新到上游 v1.11.20（2026-11-10 合并，见第十三节）；本地 android 取信息补丁仍在；
 - 实例 B：2026-11-12 核查时在助理 VM 上未找到实际部署（该 VM 上没有 MyTube），本节此前写的实例 B 状态是计划值；当前实际在跑的是实例 C（见第十四节）；
 - 实例 C（Simular Box）：MyTube v1.11.20 源码构建，本地 5551 正常；OpenList v4.2.8 本地 5244 正常；公网隧道 MyTube 55551、OpenList 55244 已通并验证；MyTube 登录已开启；yt-dlp 配置为 web + 登录 cookies + node + ejs（见第十四节第 4 条）；两个视频已下载并同步备份到天翼（见第十四节第 7 条，核查方法见第九节）；
+- 中继 OpenList（45244）时断时续：2026-11-12 02:00 与 12:48 两次拒绝连接，主机本身通，是该服务进程停了；有专人监控、半小时内自动恢复（13:01 已恢复，13:00 定时同步成功）；
+- Box 本地 /boxtianyi 挂载仍坏：2026-11-12 12:53 复查，Box 到 189.cn 仍 10 秒超时，日志里天翼 OAuth 登录超时 20 次（最后一次 08:29）；同步不走它，不影响落盘；
 - yt-dlp 托管发行版 2026.10.26 已安装（证书软链已做，升级后须重做，见第五节第 1 条）；
 - VPS 实例：4 个视频已全部落盘天翼；
 - 保活（30 分钟看门狗 + 5 分钟 systemd 定时任务，定时任务被平台重建清除后由看门狗自动重装）与每日体检均已启用。
@@ -287,7 +291,9 @@ Simular Box（https://simular.ai）是一台按量计费的云桌面：浏览器
 
   rclone 配置 `~/rclone-openlist-remote.conf`（remote 名 `openlist-remote`，type webdav，url `http://127.0.0.1:14544/dav`，vendor other；**配置里不写令牌**）。同步脚本 `~/mytube-tianyi-sync.sh` 每 30 分钟由 cron 跑（Box 无 systemd，cron 守护进程需 `sudo cron` 手工启动，重启后要重起）：先检查中继通不通，断了就自动重建一次；每次运行从 `~/openlist-remote-token`（600 权限，唯一存放处）现读 admin token，用 `flock -n` 加锁，跑 `rclone copy ~/mytube/backend/uploads/videos openlist-remote:boxtianyi/mytube --config ~/rclone-openlist-remote.conf --webdav-bearer-token "$TOKEN" --size-only --min-age 10m --exclude "*.part" --exclude ".temp.*" --exclude ".f[0-9]*.*" --exclude ".ytdlp*"`，日志 `~/mytube-tianyi-sync.log`；脚本从不回显令牌。目标是远程 OpenList 上的 `boxtianyi/mytube`（该 OpenList 上另有 `/musetianyi`，不要用错）。
 
-  注意：Box 上的 OpenList 本地挂载 `/boxtianyi`（189CloudPC 驱动）因 189.cn 访问不到而加载失败，驱动每次访问都会重试登录，若网络恢复可能自愈；但同步走远程 OpenList，不依赖它，可忽略。
+  注意：Box 上的 OpenList 本地挂载 `/boxtianyi`（189CloudPC 驱动）因 189.cn 访问不到而加载失败，驱动每次访问都会重试登录，若网络恢复可能自愈；2026-11-12 12:53 复查时 Box 到 189.cn 仍 10 秒超时，OpenList 日志里天翼 OAuth2 登录超时（`context deadline exceeded`）共 20 次，最后一次 08:29（此后日志无新写入）；DAV 返回 401、界面访客被禁，需登录后才能在界面上核实挂载本身。同步走远程 OpenList，不依赖它，可忽略。
+
+  注意：中继 OpenList（45244）时断时续——2026-11-12 02:00 与 12:48 两次拒绝连接，主机本身通（从 VPS ping 过去 0.78ms，只有一跳；22、80、443 端口都开着），是该服务进程停了；有专人监控、半小时内自动恢复（13:01 已恢复，13:00 定时同步成功）。另有一个已知隐患：同步脚本里重建中继的那行写的是 VPS 自己的 45244（`-L 127.0.0.1:14544:127.0.0.1:45244`），而实际跑着的中继用的是 `<中继 OpenList 地址>:45244`；VPS 本机根本没有 45244 监听，万一现在这个中继死了、由脚本重建，新中继会指到一个没有服务的地方，同步会失败——暂未改，监控会兜底。
 
 ### 4. yt-dlp 配置（验证过的组合）
 
@@ -378,6 +384,14 @@ MyTube 设置里的 yt-dlp 配置（标准 yt-dlp 配置语法，一行一个选
 
 注意：另一条路（把字幕语言从 `all` 改成 `all,-live_chat`）走不通——`subLangs` 不是设置项，是 `ytdlpConfig.ts` 第 260 行写死的默认值 `"all"`，且用户配置文本里的 subtitle 键会被 `extractUserConfigOptions` 主动剥离，改设置改不了它；要改它得改代码。放宽白名单是有意识的取舍：live_chat 下载实际走的是 youtube.com 的 https 请求。临时绕开是把设置里的 Download subtitles 开关关掉（不再下任何字幕），但会失去所有视频的字幕，不推荐长期用。
 
+#### 问题 9：中继的另一端（远程 OpenList 45244）拒绝连接
+
+现象：同步日志报 `ERROR: relay to remote OpenList is down`；中继 14544 的 curl 返回 000；VPS 上直连 45244 报 `Connection refused`。
+
+成因：不是网络问题，是那台主机上的 OpenList 服务进程停了。主机本身是通的（从 VPS ping 过去 0.78ms，只有一跳；22、80、443 端口都开着），但 45244 端口上没有服务在监听。该服务时断时续（2026-11-12 02:00 与 12:48 两次停过），有专人监控、半小时内自动恢复。
+
+解法：等它自动恢复（半小时内），或去那台机器上把 OpenList 重新启动。从 VPS、Box 都修不了它。恢复后中继无需重建（SSH 转发监听还在，目标一回来就通），下次定时同步照常跑。
+
 ### 6. 维护与重启清单（Box 休眠/重启后）
 
 Box 没有 systemd，所有进程在休眠/重启后都会死，需按下面顺序手工重起（全部验证过）：
@@ -396,6 +410,7 @@ Box 没有 systemd，所有进程在休眠/重启后都会死，需按下面顺�
 
 - 两个视频已下载并同步备份到天翼（`boxtianyi/mytube`），云端清单与本地逐字节核对一致：一个 485.52 MiB，一个 366.49 MiB，另有一个 42,321 字节的 `live_chat.json`（白名单修好后直播聊天回放也随视频一起下下来了）。
 - 同步是 12:21 手动跑了一次（9 分 5 秒，852.044 MiB、3 个文件），12:30 的定时任务撞上 flock 锁后什么也没做（无重复上传）。
+- 13:00 定时同步成功（中继 45244 修复后）：中继 14544 返回 200（0.27 秒），日志 `There was nothing to transfer`，Checks 3/3，用时 2.5 秒；当前没有同步在跑。
 
 ### 8. 注意事项
 
