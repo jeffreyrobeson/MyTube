@@ -23,7 +23,7 @@ MyTube（https://github.com/jeffreyrobeson/MyTube）是一个自托管的视频�
 
 **v1.11.20 新增：下载连接 SSRF 防护与移动端界面调整。** 下载连接新增 SSRF 防护（GHSA-ppj6）；移动端操作表共用滑动过渡与遮罩，车载布局修正（见第十三节）。
 
-## 二、两套实例对照
+## 二、三套实例对照
 
 | | 实例 A：VPS（主力） | 实例 B：助理 VM（第二实例） | 实例 C：Simular Box（第三实例，2026-11-12 起在跑） |
 | --- | --- | --- | --- |
@@ -308,7 +308,7 @@ MyTube 设置里的 yt-dlp 配置（标准 yt-dlp 配置语法，一行一个选
 
 - pot-provider 的 script 参数由 MyTube 代码自动合并，**不要手动加**。
 - 该配置是全局的，所有下载都用 web 客户端 + 已登录的 Chrome cookies + node + 远程 ejs 求解器。
-- 改配置要登录 MyTube（API 未登录返回 401），走 `PATCH /api/settings`，CSRF 用 `X-CSRF-Token` 响应头 + `mytube_csrf` cookie；改完 GET 读回核对。
+- 改配置要登录 MyTube（API 未登录返回 401），走 `PATCH /api/settings`，CSRF 用 `X-CSRF-Token` 请求头 + `mytube_csrf` cookie；改完 GET 读回核对。
 - 注意：v1.11.20 的 Web 界面**没有** yt-dlp 配置输入框，配置只能走 API（或直接改库，但不推荐）。
 
 ### 5. 部署中遇到的问题（逐个讲）
