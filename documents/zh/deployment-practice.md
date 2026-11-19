@@ -25,12 +25,12 @@ MyTube（https://github.com/jeffreyrobeson/MyTube）是一个自托管的视频�
 
 ## 二、三套实例对照
 
-| | 实例 A：VPS（主力） | 实例 B：助理 VM（第二实例） | 实例 C：Simular Box（第三实例，2026-11-12 起在跑） |
+| | 实例 A：VPS（主力） | 实例 B：助理 VM（第二实例，未部署，计划值，见第十节） | 实例 C：Simular Box（第三实例，2026-11-12 起在跑） |
 | --- | --- | --- | --- |
 | 运行方式 | Docker Compose | 源码构建、Node 直跑（环境无 Docker） | 源码构建、Node 直跑（环境无 Docker、无 systemd） |
 | 前端 / 后端端口 | 5556 / 5551 | 后端 5551（同源 serving 前端） | 后端 5551（同源 serving 前端） |
 | 视频主存储 | 云端（见第三节） | 本地磁盘 + 单向同步备份到云端（见第四节） | 本地磁盘 + 单向同步备份到云端（见第十四节） |
-| 公开访问 | 服务器端口直出 | 经 VPS 的 SSH 反向隧道公开（MyTube 25551、OpenList 25244） | MyTube 经 VPS 的 SSH 反向隧道公开（55551）；OpenList 用另一台的 45244（见第十四节第 3 条） |
+| 公开访问 | 服务器端口直出 | 经 VPS 的 SSH 反向隧道公开（MyTube 25551、OpenList 25244） | MyTube 经 VPS 的 SSH 反向隧道公开（VPS 侧 55551 → Box 本地 5551）；OpenList 用另一台的 45244（见第十四节第 3 条） |
 | 登录 | 已开启（401 保护 API） | 全新部署后尚未开启，待在设置里开启 | 已开启（401 保护 API） |
 | yt-dlp cookies | 使用登录 cookies（该出口 IP 未被标记） | 不用登录 cookies（见第五节） | 使用登录 cookies（见第十四节第 4 条） |
 
@@ -220,7 +220,7 @@ grep ERROR /var/log/rclone-openlist.log
 
 - 已更新到上游 v1.11.20（2026-11-10 合并，见第十三节）；本地 android 取信息补丁仍在；
 - 实例 B：2026-11-12 核查时在助理 VM 上未找到实际部署（该 VM 上没有 MyTube），本节此前写的实例 B 状态是计划值；当前实际在跑的是实例 C（见第十四节）；
-- 实例 C（Simular Box）：MyTube v1.11.20 源码构建，本地 5551 正常；OpenList v4.2.8 本地 5244 正常；公网隧道 MyTube 55551 已通并验证；OpenList 用另一台的 45244（Box 本地 55244 部署不成功，不在用）；MyTube 登录已开启；yt-dlp 配置为 web + 登录 cookies + node + ejs（见第十四节第 4 条）；两个视频已下载并同步备份到天翼（见第十四节第 7 条，核查方法见第九节）；
+- 实例 C（Simular Box）：MyTube v1.11.20 源码构建，本地 5551 正常；OpenList v4.2.8 本地 5244 正常；公网隧道 MyTube 55551（VPS 侧端口，转发到 Box 本地 5551）已通并验证；同步用的 OpenList 是另一台的 45244（Box 本地 OpenList 的天翼挂载是坏的，不在用；但 55244 隧道本身是通的，见第十四节第 3 条）；MyTube 登录已开启；yt-dlp 配置为 web + 登录 cookies + node + ejs（见第十四节第 4 条）；两个视频已下载并同步备份到天翼（见第十四节第 7 条，核查方法见第九节）；
 - 中继 OpenList（45244）时断时续：2026-11-12 02:00 与 12:48 两次拒绝连接，主机本身通，是该服务进程停了；有专人监控、半小时内自动恢复（13:01 已恢复，13:00 定时同步成功）；
 - Box 本地 /boxtianyi 挂载仍坏：2026-11-12 12:53 复查，Box 到 189.cn 仍 10 秒超时，日志里天翼 OAuth 登录超时 20 次（最后一次 08:29）；同步不走它，不影响落盘；
 - yt-dlp 托管发行版 2026.10.26 已安装（证书软链已做，升级后须重做，见第五节第 1 条）；
@@ -257,9 +257,9 @@ v1.11.18 加入了批量整理能力，解决大量导入后逐个整理的成�
 Simular Box（https://simular.ai）是一台按量计费的云桌面：浏览器里打开就是一台带图形界面的 Ubuntu 桌面，自带 Chrome 浏览器与终端，可像用本地电脑一样操作。本次用的是免费套餐（1,000 点数，免费版无配置可选）。
 
 - 一台名为 main 的云桌面：Ubuntu 24.04.5 LTS，XFCE 桌面，内核 6.8.0-142-generic，内存 3.8 GB，磁盘 20 GB（约 2.3 GB 已用），用户 `user`，家目录 `/home/user`。
-- 系统镜像 v19（2026-11-11 从 v15 升到 v17，修好了 Box 对外访问网页的问题；2026-11-12 已是 v19）。
+- 系统镜像 v22（2026-11-11 从 v15 升到 v17，修好了 Box 对外访问网页的问题；2026-11-12 是 v19，2026-11-13 升到 v22，2026-11-17 核实；更新的镜像 v27 已出，暂未升）。
 - **没有 systemd**：所有服务都不能用 systemd 管理，全部以前台终端或 `setsid` 分离的方式手工跑，见第 6 条。
-- **空闲会休眠**：Box 空闲一段时间后自动休眠，界面显示 Offline 是正常现象，唤醒后几秒恢复；但休眠/重启会杀掉所有手工跑的进程（MyTube 后端、隧道、POT 服务、cron 守护进程），见第 6 条。
+- **空闲会休眠**：Box 空闲一段时间后自动休眠，界面显示 Offline 是正常现象；唤醒不用在控制台点，Box MCP 调用就能唤醒（2026-11-19 验证过），唤醒后几秒恢复；但休眠/重启会杀掉所有手工跑的进程（MyTube 后端、隧道、POT 服务、cron 守护进程），见第 6 条。
 - 网络出口：Shell 环境默认把 HTTP/HTTPS 流量经本地代理 `127.0.0.1:3128`、SOCKS5 经 `127.0.0.1:1080`；apt 也走 3128 代理。对外 HTTPS 到多数网站正常（百度、Google 均可达）。**但有两个例外**：天翼云盘 API（open.e.189.cn）从 Box 和 VPS 都访问不到（DNS 能解析，但连接超时）；另一台 OpenList 的地址 Box 也直连不上（出口拒绝）。因此 Box 上不能直接挂天翼云盘，同步要经过 VPS 中继（见第 3 条）。
 
 ### 2. 部署步骤
@@ -281,7 +281,21 @@ Simular Box（https://simular.ai）是一台按量计费的云桌面：浏览器
   setsid ssh -i ~/.ssh/id_ed25519_mytube -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -N -R 0.0.0.0:55551:localhost:5551 -R 0.0.0.0:55244:localhost:5244 root@<VPS>
   ```
 
-  VPS 侧 `sshd_config` 须把 `GatewayPorts` 设为 `yes`（默认只绑 127.0.0.1，公网打不开；改完 `sshd -t` 检查并重载 sshd）。公开地址：MyTube `http://<VPS 公网 IP>:55551/`，验证返回 200。Box 的 OpenList 虽经隧道转发到 55244 且能返回 200，但它的天翼挂载是坏的，部署不成功、不在用；实际用的 OpenList 是另一台的 45244（见下面同步一节）。
+  VPS 侧 `sshd_config` 须把 `GatewayPorts` 设为 `yes`（默认只绑 127.0.0.1，公网打不开；改完 `sshd -t` 检查并重载 sshd）。
+
+  端口归属（别弄混——55551 是 VPS 侧的端口，不是中继那台机器的）：
+
+  | 端口 | 在哪台机器上 | 是什么 |
+  | --- | --- | --- |
+  | 5551 | Box 本地 | MyTube 后端 |
+  | 5244 | Box 本地 | OpenList |
+  | 4416 | Box 本地 | POT 服务 |
+  | 55551 | VPS（反向隧道） | 转发到 Box 本地 5551，MyTube 公开入口 |
+  | 55244 | VPS（反向隧道） | 转发到 Box 本地 5244，OpenList 公开入口 |
+  | 45244 | 另一台（中继 OpenList） | 同步用的远程 OpenList，与 MyTube 无关 |
+  | 5551 / 5556 | 另一台（中继 OpenList 所在机器） | 那台机器上另有一套 MyTube（后端 5551、前端 5556），与实例 C 无关；**它上面没有 55551**，不要往 `<另一台地址>:55551` 上试 |
+
+  公开地址：MyTube 优先走经 Cloudflare Tunnel 的域名（到 VPS 的 55551，2026-11-19 验证 200）；OpenList 同理（到 55244，同样 200）。直接用 `http://<VPS 公网 IP>:55551/` 也能通，但 VPS 公网 IP 会被墙间歇性封，优先用域名。Box 的 OpenList 虽经隧道转发到 55244 且能返回 200，但它的天翼挂载是坏的，不在用；实际同步用的 OpenList 是另一台的 45244（见下面同步一节）。
 
 云端同步（Box → VPS 中继 → 另一台 OpenList）：Box 直连不上天翼 API 和中继 OpenList，于是用一条 SSH 本地转发做中继：
 
@@ -396,8 +410,8 @@ MyTube 设置里的 yt-dlp 配置（标准 yt-dlp 配置语法，一行一个选
 
 Box 没有 systemd，所有进程在休眠/重启后都会死，需按下面顺序手工重起（全部验证过）：
 
-1. 唤醒 Box（界面 Offline 是正常的，唤醒后几秒恢复）。
-2. MyTube 后端：`cd ~/mytube/backend && npm run start`（前台终端跑）。
+1. 唤醒 Box（界面 Offline 是正常的；不用在控制台点，Box MCP 调用就能唤醒，唤醒后几秒恢复）。
+2. MyTube 后端：`cd ~/mytube/backend && npm run start`（前台终端跑；也可以 `setsid nohup npm run start` 脱离跑，日志 `/tmp/mytube-backend.log`）。
 3. POT 服务：`~/mytube/backend/bgutil-ytdlp-pot-provider/server` 里 `setsid nohup node build/main.js`，日志 `/tmp/pot-server.log`，等 `ping` 返回 200（约 27 秒）。
 4. 反向隧道：`setsid ssh -i ~/.ssh/id_ed25519_mytube -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -N -R 0.0.0.0:55551:localhost:5551 -R 0.0.0.0:55244:localhost:5244 root@<VPS>`，日志 `/tmp/mytube-tunnel.log`（55244 这一路转发还在跑，但 Box 的 OpenList 不在用，见第 3 条）。
 5. 同步中继：`setsid ssh -i ~/.ssh/id_ed25519_mytube -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -N -L 127.0.0.1:14544:<中继 OpenList 地址>:45244 root@<VPS>`，日志 `/tmp/mytube-relay.log`。
@@ -411,6 +425,7 @@ Box 没有 systemd，所有进程在休眠/重启后都会死，需按下面顺�
 - 两个视频已下载并同步备份到天翼（`boxtianyi/mytube`），云端清单与本地逐字节核对一致：一个 485.52 MiB，一个 366.49 MiB，另有一个 42,321 字节的 `live_chat.json`（白名单修好后直播聊天回放也随视频一起下下来了）。
 - 同步是 12:21 手动跑了一次（9 分 5 秒，852.044 MiB、3 个文件），12:30 的定时任务撞上 flock 锁后什么也没做（无重复上传）。
 - 13:00 定时同步成功（中继 45244 修复后）：中继 14544 返回 200（0.27 秒），日志 `There was nothing to transfer`，Checks 3/3，用时 2.5 秒；当前没有同步在跑。
+- **2026-11-19 补充**：Box 已是系统镜像 v22；11 月 19 日休眠后经 Box MCP 唤醒，按第 6 条重起全部服务并验证，MyTube 与 OpenList 的域名均返回 200（`/api/version` 未登录返回 401，是登录保护，正常）。同日出现过一次 502，报的是 VPS 的 45551 端口——该端口上根本没有服务（MyTube 是 55551），是端口号写错了；报障前先按第 3 条的表核对端口归属。另一台机器上的 MyTube（5551/5556）与实例 C 无关，那台机器上没有 55551。
 
 ### 8. 注意事项
 
@@ -418,4 +433,4 @@ Box 没有 systemd，所有进程在休眠/重启后都会死，需按下面顺�
 - OpenList 管理员的存储列表 API 会在 `addition` 字段里返回天翼的凭证 JSON（access_token、refresh_token、密码、用户名），**绝不要打印、记录它的值**。
 - OpenList 的 admin token 只存在 Box 上的 `~/openlist-remote-token`（600 权限）里，同步脚本每次运行现读；不要写进配置、日志或文档。
 - 从终端截图上抄 base64/指纹容易看错字符（1/I、0/O、8/B、g/q），密钥指纹必须用 `ssh-keygen -lf` 核对。
-- MyTube 后端日志只存在跑后端的前台终端里（backend/ 下没有日志文件），查下载失败要去那个终端看。
+- MyTube 后端日志：前台终端跑时只存在那个终端里（backend/ 下没有日志文件），查下载失败要去那个终端看；脱离跑（`setsid nohup`）时日志在 `/tmp/mytube-backend.log`。
